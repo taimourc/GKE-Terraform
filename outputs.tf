@@ -1,7 +1,3 @@
-##############################
-# outputs.tf
-##############################
-
 output "cluster_endpoint" {
   description = "GKE control plane endpoint IP/DNS"
   value       = google_container_cluster.gke.endpoint

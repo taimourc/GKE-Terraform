@@ -1,6 +1,3 @@
-##############################
-# backend.tf
-##############################
 terraform {
   backend "gcs" {
     bucket = "terraform-gcp-backend"

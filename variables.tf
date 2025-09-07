@@ -1,7 +1,3 @@
-##############################
-# variables.tf
-##############################
-
 variable "project_id" {
   type        = string
   description = "GCP project ID (not number).  # <--- YOU: set in terraform.tfvars or TF_VAR_project_id"
