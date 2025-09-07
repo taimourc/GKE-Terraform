@@ -1,0 +1,78 @@
+name: tf-plan
+on:
+  pull_request:
+    paths:
+      - '**/*.tf'
+      - '.github/workflows/tf-plan.yml'
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+  pull-requests: write
+
+env:
+  TF_IN_AUTOMATION: "true"
+  TF_INPUT: "false"
+  TF_CLI_ARGS_init: "-input=false"
+  TF_CLI_ARGS_plan: "-input=false -no-color"
+  TF_CLI_ARGS_validate: "-no-color"
+  TF_LOG: "ERROR"
+  TF_VAR_project_id: ${{ secrets.GCP_PROJECT_ID }}
+  TF_VAR_region: ${{ secrets.GCP_REGION }}
+
+jobs:
+  plan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Auth to Google Cloud
+        if: ${{ github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository }}
+        uses: google-github-actions/auth@v3
+        with:
+          credentials_json: ${{ secrets.GOOGLE_CREDENTIALS }}
+
+      - name: Setup gcloud
+        if: ${{ github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository }}
+        uses: google-github-actions/setup-gcloud@v3
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+
+      - name: Terraform Init
+        if: ${{ github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository }}
+        run: terraform init -upgrade
+
+      - name: Terraform Validate (same-repo)
+        if: ${{ github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository }}
+        run: terraform validate
+
+      - name: Terraform Plan
+        if: ${{ github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository }}
+        run: terraform plan -no-color | tee plan.txt
+
+      - name: Terraform Init (fork PR, no backend)
+        if: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository }}
+        run: terraform init -backend=false
+
+      - name: Terraform Validate (fork PR)
+        if: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository }}
+        run: terraform validate
+
+      - name: Attach plan to PR summary (same-repo only)
+        if: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository }}
+        run: |
+          {
+            echo "### Terraform Plan (summary)"
+            echo ""
+            echo '```'
+            sed -n '1,200p' plan.txt
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload full plan artifact (same-repo only)
+        if: ${{ github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: tf-plan.txt
+          path: plan.txt
